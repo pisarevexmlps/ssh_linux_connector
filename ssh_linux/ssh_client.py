@@ -43,7 +43,7 @@ class SSHClient:
         try:
             client.connect(**kwargs)
         except (paramiko.AuthenticationException, paramiko.SSHException, OSError) as exc:
-            raise SSHConnectorError(f"SSH connect/auth failed for {self._target.address}") from exc
+            raise SSHConnectorError(self._format_connect_error(exc)) from exc
 
         self._client = client
 
@@ -61,7 +61,11 @@ class SSHClient:
             exit_code = stdout.channel.recv_exit_status()
             return CommandResult(exit_code=exit_code, stdout=stdout_value, stderr=stderr_value)
         except (paramiko.SSHException, OSError) as exc:
-            raise SSHConnectorError(f"SSH command execution failed: {command}") from exc
+            raise SSHConnectorError(
+                f"SSH command execution failed: command={command!r} "
+                f"timeout_sec={timeout_sec or self._timeout_sec} "
+                f"cause={_format_exception_reason(exc)}"
+            ) from exc
 
     def close(self) -> None:
         if self._client is not None:
@@ -74,3 +78,25 @@ class SSHClient:
 
     def __exit__(self, exc_type, exc, tb) -> None:
         self.close()
+
+    def _format_connect_error(self, exc: Exception) -> str:
+        details = [
+            f"host={self._target.address}",
+            f"port={self._target.port}",
+            f"user={self._target.user}",
+            f"auth_method={self._target.auth.method}",
+            f"timeout_sec={self._timeout_sec}",
+        ]
+
+        if self._target.auth.method == "key" and self._target.auth.key_path:
+            details.append(f"key_path={self._target.auth.key_path}")
+
+        details.append(f"cause={_format_exception_reason(exc)}")
+        return f"SSH connect/auth failed: {' '.join(details)}"
+
+
+def _format_exception_reason(exc: Exception) -> str:
+    message = str(exc).strip()
+    if message:
+        return f"{type(exc).__name__}: {message}"
+    return type(exc).__name__
