@@ -1,0 +1,11 @@
+name: ssh_linux
+entrypoint: "python -m ssh_linux"
+schema_version: "1.0"
+supports:
+  target_types: ["host"]
+params:
+  - name: timeout_sec
+    type: int
+    default: 120
+outputs:
+  mode: "ingest"
